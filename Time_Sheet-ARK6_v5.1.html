@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Time Sheet v5.1</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  :root{--bg:#0b1220;--panel:#111a2e;--line:#22304d;--accent:#3ddc97;
+    box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+  body{background:var(--bg);color:#e6ecf5;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  input,textarea,select{background:#0d1626;border:1px solid var(--line);color:#e6ecf5;border-radius:6px;padding:4px 6px;font-size:13px;width:100%;}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  th{font-size:11px;letter-spacing:.02em;color:#8ea0c2;font-weight:600;padding:8px 6px;text-align:left;white-space:nowrap;}
+  td{padding:4px 6px;border-top:1px solid var(--line);}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  tr.highlight-row td{background:#fde68a;}
+  tr.highlight-row input,tr.highlight-row select{background:#fde68a;color:#1a1a1a;border-color:#ca8a04;}
+  tr.highlight-row input:read-only{background:#fcd34d;}
+  tr.onleave-row td{background:#bfdbfe;}
+  tr.onleave-row input,tr.onleave-row select{background:#bfdbfe;color:#1a1a1a;border-color:#3b82f6;}
+  tr.onleave-row input:read-only{background:#93c5fd;}
+  .legend-dot{display:inline-block;width:10px;height:10px;background:#fde68a;border:1px solid #ca8a04;border-radius:2px;vertical-align:middle;margin-right:4px;}
+  .fill-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:50;width:min(560px,calc(100% - 24px));background:#1e1b4b;border:1px solid #6366f1;color:#e0e7ff;border-radius:12px;padding:10px 12px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.5);}
+  .fill-toast.hidden{display:none;}
+  .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:60;display:flex;align-items:center;justify-content:center;padding:12px;}
+  .modal-back.hidden{display:none;}
+  .modal-box{width:min(560px,100%);max-height:85vh;overflow:auto;padding:16px;}
+  .ml-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+  .ml-btn{background:#334155;color:#fff;border-radius:6px;font-size:12px;padding:5px 8px;min-width:30px;line-height:1;}
+  .ml-btn:hover{background:#475569;}
+  .ml-btn[disabled]{opacity:.35;cursor:default;}
+  .ml-tab{font-size:12px;padding:6px 12px;border-radius:8px;background:#1e293b;color:#cbd5e1;}
+  .ml-tab.on{background:var(--accent);color:#000;font-weight:600;}
+  .msg-ok{color:#34d399;} .msg-err{color:#f87171;} .msg-info{color:#94a3b8;}
+  select.dd{padding-right:2px;}
+  .missing{border-color:#ef4444!important;box-shadow:0 0 0 1px #ef4444;}
+  .missing::placeholder{color:#f87171;}
+  .security-back{position:fixed;inset:0;background:rgba(2,6,23,.96);z-index:100;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(8px);}
+  .security-back.hidden{display:none;}
+  .security-box{width:min(440px,100%);padding:22px;}
+  .security-box input{font-size:16px;padding:10px 12px;}
+  .security-note{font-size:12px;color:#94a3b8;line-height:1.45;}
+  .security-grid{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;}
+</style>
+</head>
+<body class="min-h-screen">
+<div class="max-w-5xl mx-auto p-4 md:p-6">
+
+  <header class="mb-6 flex items-start justify-between flex-wrap gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-white">Time Sheet <span class="text-xs font-semibold align-middle bg-slate-700 text-slate-200 px-2 py-0.5 rounded-full">v5.1</span></h1>
+      <span id="saveStatus" class="text-xs text-slate-500"></span>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="loadDemoData()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">▶ Load Demo Data</button>
+      <button onclick="clearAllData()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg">Clear All</button>
+    </div>
+  </header>
+  <p id="demoBanner" class="hidden -mt-4 mb-6 text-xs bg-indigo-950 border border-indigo-700 text-indigo-200 rounded-lg px-3 py-2">
+    🧪 Demo data loaded — this sample month shows every status (Present, Weekend, Holiday, On Leave), a row with missing fields (red outline), calculated paid hours, and Daily Plan/Remarks drop-downs. The first few working days are left blank so you can try the auto-fill: pick a Last Departure (or Daily Plan) on the first blank row, then tap <strong>Apply to remaining rows</strong>. Also try <strong>⚙ Manage Lists</strong>, <strong>Send to Manager</strong> and <strong>Backup &amp; Restore</strong> further down. Click <strong>Clear All</strong> to start fresh.
+  </p>
+
+  <!-- Name / Period -->
+  <section class="card p-4 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="col-span-2"><label class="text-xs text-slate-400">Company Name <span class="text-slate-500">(optional)</span></label>
+        <input type="text" id="companyName" placeholder="Company Name" oninput="saveState()"></div>
+      <div class="col-span-2"><label class="text-xs text-slate-400">Name <span class="text-red-400">*</span></label>
+        <input type="text" id="empName" placeholder="Employee Name" oninput="validateHeader();saveState()"></div>
+      <div><label class="text-xs text-slate-400">Month</label>
+        <select id="periodMonth" onchange="onPeriodChange()">
+          <option value="1">January</option><option value="2">February</option>
+          <option value="3">March</option><option value="4">April</option>
+          <option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option>
+          <option value="9">September</option><option value="10">October</option>
+          <option value="11">November</option><option value="12">December</option>
+        </select></div>
+      <div><label class="text-xs text-slate-400">Year</label>
+        <input type="number" id="periodYear" onchange="onPeriodChange()"></div>
+    </div>
+    <p class="text-xs text-slate-500 mt-3">Switching Month/Year loads that month's own sheet automatically (each of the 12 months keeps its own saved data), and pre-fills every date in the month.</p>
+    <div class="mt-3">
+      <label class="text-xs text-slate-400 block mb-1">Weekend Days</label>
+      <div id="weekendDays" class="flex gap-3 flex-wrap"></div>
+    </div>
+  </section>
+
+  <!-- Table -->
+  <section class="card p-4 mb-6 overflow-x-auto">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <h2 class="text-sm font-semibold text-slate-300">Daily Log</h2>
+      <div class="flex gap-2">
+        <button onclick="openLists()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg">⚙ Manage Lists</button>
+        <button onclick="addRow()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg">+ Add Row</button>
+      </div>
+    </div>
+    <p class="text-xs text-slate-500 mb-2"><span class="legend-dot"></span>Status defaults to "Weekend" (yellow) on your Weekend Days and "Present" on weekdays; change any day to Holiday, Present, or On Leave as needed. Paid Time is calculated automatically from First Arrival and Last Departure. Daily Plan and Remarks are drop-downs built from what you have already entered — pick "+ Add new…" for a new entry. After you fill a field, you can copy the same value to all remaining empty working days in one tap.</p>
+    <p id="completeness" class="text-xs mb-3 font-medium"></p>
+    <table class="w-full min-w-[1000px]">
+      <thead><tr>
+        <th>Date</th><th>Day</th><th>Status</th><th>Daily Plan</th>
+        <th>First Arrival Time</th><th>Last Departure Time</th>
+        <th>Paid Time (hrs)</th><th>Remarks</th><th></th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+      <tfoot>
+        <tr><td colspan="6" class="text-right font-semibold text-slate-300 pr-2">Total Hours</td>
+          <td id="totalHours" class="font-semibold text-[var(--accent)]">0</td><td></td><td></td></tr>
+      </tfoot>
+    </table>
+  </section>
+
+  <!-- Export -->
+  <section class="card p-4">
+    <h2 class="text-sm font-semibold text-slate-300 mb-3">Export</h2>
+    <div class="flex flex-wrap gap-2">
+      <button onclick="exportXLSX()" class="text-sm bg-[var(--accent)] text-black font-semibold px-4 py-2 rounded-lg">Export to Excel (.xlsx)</button>
+      <button onclick="exportCSV()" class="text-sm bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg">Export to CSV (plain text)</button>
+    </div>
+    <p class="text-xs text-slate-500 mt-2">The .xlsx keeps the yellow weekend/holiday highlighting and red missing-field outlines, plus the employee name and period at the top (and the company name too, if you filled it in). CSV is plain text with the same header rows but no colors.</p>
+  </section>
+
+  <!-- Send to manager -->
+  <section class="card p-4 mt-6">
+    <h2 class="text-sm font-semibold text-slate-300 mb-3">Send to Manager</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+      <div class="md:col-span-2"><label class="text-xs text-slate-400">Manager email <span class="text-slate-500">(optional)</span></label>
+        <input type="email" id="mgrEmail" placeholder="manager@company.com" oninput="saveState()"></div>
+      <div><label class="text-xs text-slate-400">Attach as</label>
+        <select id="mgrFormat" onchange="saveState()"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV (plain text)</option></select></div>
+    </div>
+    <div class="mt-3"><button id="sendBtn" onclick="sendToManager()" class="text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-lg">✉ Email this time sheet</button></div>
+    <p id="sendStatus" class="text-xs mt-2 msg-info"></p>
+    <p class="text-xs text-slate-500 mt-2">On a phone or tablet this opens your share sheet with the file attached — choose your email app. On a computer the file is downloaded and your email app opens with the message ready; attach the downloaded file before sending.</p>
+  </section>
+
+  <!-- Security -->
+  <section class="card p-4 mt-6">
+    <h2 class="text-sm font-semibold text-slate-300 mb-3">Security</h2>
+    <div class="space-y-3">
+      <label class="flex items-center gap-2 text-sm text-slate-200">
+        <input type="checkbox" id="appLockEnabled" style="width:auto" onchange="toggleAppLock(this.checked)">
+        Enable App Lock (PIN)
+      </label>
+      <div id="lockOptions" class="hidden pl-6 space-y-2">
+        <div class="flex flex-wrap gap-2 items-center">
+          <button onclick="setOrChangePin()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg">Set / Change PIN</button>
+          <button id="lockNowBtn" onclick="lockApp()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">Lock now</button>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" id="biometricEnabled" style="width:auto" onchange="toggleBiometric(this.checked)">
+            Use device biometric / security key when available
+          </label>
+          <p id="biometricInfo" class="security-note mt-1">Checking device biometric support…</p>
+        </div>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-slate-200">
+        <input type="checkbox" id="encryptBackups" style="width:auto" onchange="saveSecuritySettings()">
+        Encrypt downloaded backups by default
+      </label>
+      <p class="security-note">App Lock protects this app on this device. Encrypted backups use AES-GCM with a password-derived key. The backup password is never stored in the app.</p>
+      <p id="securityStatus" class="text-xs msg-info"></p>
+    </div>
+  </section>
+
+  <!-- Backup & restore -->
+  <section class="card p-4 mt-6">
+    <h2 class="text-sm font-semibold text-slate-300 mb-3">Backup &amp; Restore</h2>
+    <div class="flex flex-wrap gap-2">
+      <button onclick="downloadBackup()" class="text-sm bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg">⬇ Download backup</button>
+      <button onclick="document.getElementById('restoreFile').click()" class="text-sm bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg">⬆ Restore from backup…</button>
+      <input type="file" id="restoreFile" accept=".json,application/json" style="display:none;width:auto" onchange="onRestoreFile(this)">
+    </div>
+    <p id="backupInfo" class="text-xs text-slate-400 mt-2"></p>
+    <p id="backupStatus" class="text-xs mt-1 msg-info"></p>
+    <p class="text-xs text-slate-500 mt-2">Your data is stored only in this browser. When backup encryption is enabled, the downloaded backup is password-protected and cannot be restored without that password. Older plain JSON backups remain restorable. Restoring replaces the data currently on this device.</p>
+  </section>
+
+</div>
+
+<div id="listsModal" class="modal-back hidden" onclick="if(event.target===this)closeLists()">
+  <div class="modal-box card" role="dialog" aria-modal="true" aria-label="Manage drop-down lists">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold text-white">Manage Drop-down Lists</h3>
+      <button onclick="closeLists()" class="text-xs bg-[var(--accent)] text-black font-semibold px-3 py-1.5 rounded-lg">Done</button>
+    </div>
+    <div id="listsBody"></div>
+  </div>
+</div>
+
+<div id="fillToast" class="fill-toast hidden" role="status">
+  <div id="fillToastMsg" class="mb-2"></div>
+  <div class="flex gap-2 justify-end">
+    <button onclick="dismissFill()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg">Dismiss</button>
+    <button onclick="applyFill()" class="text-xs bg-[var(--accent)] text-black font-semibold px-3 py-1.5 rounded-lg">Apply to remaining rows</button>
+  </div>
+</div>
+
+<script>
+const KEY = 'ts_data_v2';
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+let rows = [];
+let periods = {};       // { 'YYYY-MM': { rows: [...] } }
+let currentPeriod = '';
+let idCounter = 0;
+let lists = {plan:[], remarks:[]};   // drop-down choices (order = display order)
+let lastBackup = '';
+const APP_VERSION = '5.1';
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function periodKey(year, month){ return `${year}-${pad2(month)}`; }
+function periodLabel(year, month){ return `${MONTHS[month-1]} ${year}`; }
+function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
+
+function dayName(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d)) return '';
+  return d.toLocaleDateString(undefined, {weekday:'long'});
+}
+
+let weekendDays = new Set([0,6]); // default: Sunday(0) and Saturday(6)
+const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+function renderWeekendPicker(){
+  const el = document.getElementById('weekendDays');
+  el.innerHTML = DAY_LABELS.map((lbl,i)=>`
+    <label class="flex items-center gap-1 text-xs text-slate-300">
+      <input type="checkbox" style="width:auto" ${weekendDays.has(i)?'checked':''} onchange="toggleWeekendDay(${i},this.checked)">${lbl}
+    </label>`).join('');
+}
+
+function toggleWeekendDay(i, checked){
+  if(checked) weekendDays.add(i); else weekendDays.delete(i);
+  render();
+}
+
+function isWeekend(dateStr){
+  if(!dateStr) return false;
+  const d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d)) return false;
+  return weekendDays.has(d.getDay());
+}
+
+function calcPaidHours(r){
+  if(!r.arrival || !r.departure) return '';
+  const [ah,am] = r.arrival.split(':').map(Number);
+  const [dh,dm] = r.departure.split(':').map(Number);
+  let mins = (dh*60+dm) - (ah*60+am);
+  if(mins < 0) mins += 24*60; // handles an overnight shift
+  return (mins/60).toFixed(2);
+}
+
+function newRow(vals){
+  const id = idCounter++;
+  const r = Object.assign({id, date:'', status:'Present', plan:'', arrival:'', departure:'', paid:'', remarks:''}, vals||{});
+  rows.push(r);
+  return id;
+}
+
+function generateMonthRows(year, month){
+  rows = [];
+  const n = daysInMonth(year, month);
+  for(let d=1; d<=n; d++){
+    const date = `${year}-${pad2(month)}-${pad2(d)}`;
+    newRow({date, status: isWeekend(date) ? 'Weekend' : 'Present'});
+  }
+}
+
+function onPeriodChange(){
+  fillPrompt = null; addingNew = null;
+  document.getElementById('demoBanner').classList.add('hidden');
+  if(currentPeriod) periods[currentPeriod] = {rows};
+  const year = parseInt(document.getElementById('periodYear').value, 10);
+  const month = parseInt(document.getElementById('periodMonth').value, 10);
+  const key = periodKey(year, month);
+  currentPeriod = key;
+  if(periods[key] && periods[key].rows && periods[key].rows.length){
+    rows = periods[key].rows;
+  } else {
+    generateMonthRows(year, month);
+    periods[key] = {rows};
+  }
+  render();
+}
+
+function upd(id, field, val){
+  const r = rows.find(x=>x.id===id);
+  if(!r) return;
+  r[field] = val;
+  if((field==='plan' || field==='remarks') && val) ensureInList(field, val);
+  if(field==='arrival' || field==='departure') r.paid = calcPaidHours(r);
+  if(FILLABLE.includes(field) && val) offerFill(id, field, val); else if(field==='status'||field==='date') hideFill();
+  render();
+}
+
+// ---- Drop-down (Daily Plan / Remarks) ----
+const FILLABLE = ['plan','arrival','departure','remarks'];
+const FIELD_LABEL = {plan:'Daily Plan', arrival:'First Arrival', departure:'Last Departure', remarks:'Remarks'};
+let addingNew = null;   // {id, field} while typing a brand-new drop-down entry
+let fillPrompt = null;  // {id, field, value}
+
+function ensureInList(field, val){
+  if(val && String(val).trim() && !lists[field].includes(val)) lists[field].push(val);
+}
+function optionsFor(field, cur){
+  const base = lists[field].slice();
+  if(cur && !base.includes(cur)) base.push(cur);   // entries whose choice was later removed still display
+  return base;
+}
+function seedLists(){
+  ['plan','remarks'].forEach(f=>{ collectDistinct(f).forEach(v=>{ if(!lists[f].includes(v)) lists[f].push(v); }); });
+}
+function cleanList(arr){
+  const out = [], seen = new Set();
+  arr.forEach(v=>{ if(typeof v!=='string' || !v.trim() || seen.has(v)) return; seen.add(v); out.push(v.slice(0,500)); });
+  return out.slice(0,1000);
+}
+function esc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function onDropdown(id, field, sel){
+  if(sel.value === '__new__'){ addingNew = {id, field}; render(); return; }
+  upd(id, field, sel.value);
+}
+
+function commitNew(){
+  if(!addingNew) return;
+  const {id, field} = addingNew;
+  addingNew = null;
+  const el = document.getElementById('newEntry');
+  const val = el ? el.value.trim() : '';
+  if(val) upd(id, field, val); else render();
+}
+function cancelNew(){ addingNew = null; render(); }
+function newEntryKey(e){
+  if(e.key === 'Enter'){ e.preventDefault(); commitNew(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); cancelNew(); }
+}
+
+function dropdownCell(r, field, missingCls, placeholder){
+  if(addingNew && addingNew.id===r.id && addingNew.field===field){
+    return `<input type="text" id="newEntry" placeholder="Type new ${FIELD_LABEL[field]} + Enter" onkeydown="newEntryKey(event)" onblur="commitNew()">`;
+  }
+  const opts = optionsFor(field, r[field]);
+  const blank = `<option value=""${!r[field]?' selected':''}>${esc(placeholder)}</option>`;
+  const items = opts.map(v=>`<option value="${esc(v)}"${r[field]===v?' selected':''}>${esc(v)}</option>`).join('');
+  return `<select class="dd${missingCls}" onchange="onDropdown(${r.id},'${field}',this)">${blank}${items}<option value="__new__">+ Add new…</option></select>`;
+}
+
+// ---- Copy a value to remaining empty working days ----
+function fillTargets(id, field){
+  const idx = rows.findIndex(x=>x.id===id);
+  if(idx < 0) return [];
+  return rows.slice(idx+1).filter(x => x.date && x.status==='Present' && !x[field]);
+}
+function offerFill(id, field, value){
+  fillPrompt = {id, field, value};
+}
+function hideFill(){ fillPrompt = null; }
+function dismissFill(){ fillPrompt = null; renderFillPrompt(); }
+function applyFill(){
+  if(!fillPrompt) return;
+  const {id, field, value} = fillPrompt;
+  fillTargets(id, field).forEach(t=>{
+    t[field] = value;
+    if(field==='arrival' || field==='departure') t.paid = calcPaidHours(t);
+  });
+  fillPrompt = null;
+  render();
+}
+function renderFillPrompt(){
+  const box = document.getElementById('fillToast');
+  if(fillPrompt){
+    const n = fillTargets(fillPrompt.id, fillPrompt.field).length;
+    if(n > 0){
+      document.getElementById('fillToastMsg').innerHTML = `Use <strong>${esc(fillPrompt.value)}</strong> as <strong>${FIELD_LABEL[fillPrompt.field]}</strong> for the remaining <strong>${n}</strong> empty working day${n>1?'s':''}?`;
+      box.classList.remove('hidden');
+      return;
+    }
+    fillPrompt = null;
+  }
+  box.classList.add('hidden');
+}
+
+function delRow(id){ rows = rows.filter(r=>r.id!==id); render(); }
+function addRow(){ newRow(); render(); }
+
+function isWorkDay(r){ return !!r.date && r.status==='Present'; }
+
+function statusOptions(r){
+  const opts = ['Present', 'Weekend', 'Holiday', 'On Leave'];
+  return opts.map(v=>`<option value="${v}"${r.status===v?' selected':''}>${v}</option>`).join('');
+}
+
+function rowHTML(r){
+  const hl = (r.status==='Weekend' || r.status==='Holiday') ? ' class="highlight-row"' : (r.status==='On Leave' ? ' class="onleave-row"' : '');
+  const wd = isWorkDay(r);
+  const mPlan = wd && !r.plan ? ' missing' : '';
+  const mArr  = wd && !r.arrival ? ' missing' : '';
+  const mDep  = wd && !r.departure ? ' missing' : '';
+  return `<tr id="row-${r.id}"${hl}>
+    <td><input type="date" value="${r.date||''}" onchange="upd(${r.id},'date',this.value)"></td>
+    <td><input type="text" value="${dayName(r.date)}" readonly></td>
+    <td><select onchange="upd(${r.id},'status',this.value)">${statusOptions(r)}</select></td>
+    <td>${dropdownCell(r,'plan',mPlan,wd?'Select (required)':'Select…')}</td>
+    <td><input type="time" class="${mArr}" value="${r.arrival||''}" onchange="upd(${r.id},'arrival',this.value)"></td>
+    <td><input type="time" class="${mDep}" value="${r.departure||''}" onchange="upd(${r.id},'departure',this.value)"></td>
+    <td><input type="text" value="${r.paid||''}" readonly title="Calculated from First Arrival and Last Departure"></td>
+    <td>${dropdownCell(r,'remarks','', 'None')}</td>
+    <td><button onclick="delRow(${r.id})" class="text-slate-500 hover:text-red-400 text-xs">✕</button></td>
+  </tr>`;
+}
+
+function collectDistinct(field){
+  const set = new Set();
+  Object.values(periods).forEach(p => (p.rows||[]).forEach(r=>{ if(r[field]) set.add(r[field]); }));
+  rows.forEach(r=>{ if(r[field]) set.add(r[field]); });
+  return Array.from(set).sort();
+}
+
+
+function validateHeader(){
+  const nameEl = document.getElementById('empName');
+  nameEl.classList.toggle('missing', !nameEl.value.trim());
+}
+
+function render(){
+  document.getElementById('tbody').innerHTML = rows.map(rowHTML).join('');
+  const total = rows.reduce((sum,r)=> sum + (parseFloat(r.paid)||0), 0);
+  document.getElementById('totalHours').textContent = total.toFixed(2);
+
+  validateHeader();
+  const missingCount = rows.filter(r=> isWorkDay(r) && (!r.plan || !r.arrival || !r.departure)).length;
+  const compEl = document.getElementById('completeness');
+  if(missingCount>0){
+    compEl.textContent = `⚠ ${missingCount} working day(s) still missing Daily Plan, First Arrival, or Last Departure — fields outlined in red.`;
+    compEl.className = 'text-xs mb-3 font-medium text-red-400';
+  } else {
+    compEl.textContent = '✓ All working days have Daily Plan, First Arrival and Last Departure filled in.';
+    compEl.className = 'text-xs mb-3 font-medium text-emerald-400';
+  }
+
+  if(currentPeriod) periods[currentPeriod] = {rows};
+  renderFillPrompt();
+  saveState();
+  if(addingNew){ const ne=document.getElementById('newEntry'); if(ne) ne.focus(); }
+}
+
+function buildState(){
+  if(currentPeriod) periods[currentPeriod] = {rows};
+  return {
+    empName: document.getElementById('empName').value,
+    companyName: document.getElementById('companyName').value,
+    currentPeriod,
+    periods,
+    weekendDays: Array.from(weekendDays),
+    lists,
+    email: {to: document.getElementById('mgrEmail').value, format: document.getElementById('mgrFormat').value},
+    lastBackup
+  };
+}
+
+function saveState(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(buildState()));
+    const s = document.getElementById('saveStatus');
+    s.textContent = 'Saved locally ✓';
+    clearTimeout(window._saveTO);
+    window._saveTO = setTimeout(()=>{ s.textContent=''; }, 1500);
+  }catch(e){ console.error('Save failed', e); }
+}
+
+function applyData(data){
+  document.getElementById('empName').value = data.empName || '';
+  document.getElementById('companyName').value = data.companyName || '';
+  weekendDays = new Set(Array.isArray(data.weekendDays) ? data.weekendDays : [0,6]);
+  periods = data.periods || {};
+  Object.values(periods).forEach(p=>{
+    (p.rows||[]).forEach(r=>{
+      if(r.status === undefined){
+        if(r.dayType !== undefined){
+          r.status = r.dayType === '' ? 'Present' : (r.dayType === 'Yes' ? 'Holiday' : r.dayType);
+          delete r.dayType;
+        } else if(r.holiday !== undefined){
+          r.status = r.holiday ? 'Holiday' : 'Present';
+          delete r.holiday;
+        } else {
+          r.status = 'Present';
+        }
+      }
+    });
+  });
+  let maxId = -1;
+  Object.values(periods).forEach(p => (p.rows||[]).forEach(r=>{ if(r.id>maxId) maxId=r.id; }));
+  idCounter = maxId+1;
+  const now = new Date();
+  currentPeriod = data.currentPeriod || periodKey(now.getFullYear(), now.getMonth()+1);
+  const [y,m] = currentPeriod.split('-').map(Number);
+  document.getElementById('periodYear').value = y;
+  document.getElementById('periodMonth').value = m;
+  if(periods[currentPeriod] && periods[currentPeriod].rows && periods[currentPeriod].rows.length){
+    rows = periods[currentPeriod].rows;
+  } else {
+    generateMonthRows(y, m);
+    periods[currentPeriod] = {rows};
+  }
+  // v4: drop-down lists, email settings, last backup (older saves have none -> lists are built from existing entries)
+  const L = data.lists;
+  if(L && Array.isArray(L.plan) && Array.isArray(L.remarks)){
+    lists = {plan: cleanList(L.plan), remarks: cleanList(L.remarks)};
+  } else {
+    lists = {plan:[], remarks:[]};
+    seedLists();
+  }
+  const E = data.email || {};
+  document.getElementById('mgrEmail').value = typeof E.to === 'string' ? E.to : '';
+  document.getElementById('mgrFormat').value = E.format === 'csv' ? 'csv' : 'xlsx';
+  lastBackup = typeof data.lastBackup === 'string' ? data.lastBackup : '';
+  updateBackupInfo();
+}
+
+function loadState(){
+  try{
+    const data = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if(!data) return false;
+    applyData(data);
+    return true;
+  }catch(e){ return false; }
+}
+
+function csvField(v){ return '"' + String(v||'').replace(/"/g,'""') + '"'; }
+
+function loadDemoData(){
+  if(!confirm('Load sample demo data? This will replace the current month\'s entries (your saved data for other months stays untouched).')) return;
+
+  document.getElementById('companyName').value = 'Acme Logistics Pvt Ltd';
+  document.getElementById('empName').value = 'Jordan Rivera';
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth()+1;
+  document.getElementById('periodYear').value = year;
+  document.getElementById('periodMonth').value = month;
+
+  weekendDays = new Set([0,6]);
+  renderWeekendPicker();
+  fillPrompt = null; addingNew = null;
+
+  currentPeriod = periodKey(year, month);
+  generateMonthRows(year, month);
+
+  const plans = ['Client calls','Report prep','Site inspection','Team sync','Inventory audit','Sales follow-up'];
+  const remarksBank = ['','','','Worked from home','Left early for appointment',''];
+  const n = rows.length;
+
+  rows.forEach((r, i)=>{
+    const day = i+1;
+    if(r.status !== 'Weekend'){
+      if(day % 11 === 0 && day <= n-1){
+        r.status = 'Holiday';
+      } else if(day % 9 === 0 && day <= n-2){
+        r.status = 'On Leave';
+      }
+    }
+    if(isWorkDay(r)){
+      r.plan = plans[day % plans.length];
+      r.arrival = '09:' + (day % 2 === 0 ? '15' : '00');
+      r.departure = (day % 3 === 0 ? '17:' : '18:') + (day % 2 === 0 ? '45' : '30');
+      r.paid = calcPaidHours(r);
+      r.remarks = remarksBank[day % remarksBank.length];
+    }
+  });
+
+  // Deliberately leave the first working days incomplete so the missing-field warning and the
+  // drop-down + "apply to remaining rows" feature can be tried right away.
+  rows.filter(r => isWorkDay(r)).slice(0, 4).forEach(r=>{
+    r.plan = ''; r.arrival = ''; r.departure = ''; r.paid = ''; r.remarks = '';
+  });
+
+  rows.forEach(r=>{ ensureInList('plan', r.plan); ensureInList('remarks', r.remarks); });
+  const mg = document.getElementById('mgrEmail');
+  if(!mg.value.trim()) mg.value = 'manager@example.com';
+  periods[currentPeriod] = {rows};
+  document.getElementById('demoBanner').classList.remove('hidden');
+  render();
+}
+
+function clearAllData(){
+  if(!confirm('Clear all data? This removes the employee name, company name, every saved month, your drop-down lists and email settings. This cannot be undone.\n\nTip: use Backup & Restore first if you may need this data again.')) return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  document.getElementById('companyName').value = '';
+  document.getElementById('empName').value = '';
+  document.getElementById('demoBanner').classList.add('hidden');
+  periods = {};
+  lists = {plan:[], remarks:[]};
+  lastBackup = '';
+  document.getElementById('mgrEmail').value = '';
+  document.getElementById('mgrFormat').value = 'xlsx';
+  fillPrompt = null; addingNew = null;
+  setSendStatus('', ''); setBackupStatus('', ''); updateBackupInfo();
+  weekendDays = new Set([0,6]);
+  renderWeekendPicker();
+  const now = new Date();
+  document.getElementById('periodYear').value = now.getFullYear();
+  document.getElementById('periodMonth').value = now.getMonth()+1;
+  onPeriodChange();
+}
+
+function csvText(){
+  const empName = document.getElementById('empName').value || '';
+  const companyName = document.getElementById('companyName').value.trim();
+  const year = parseInt(document.getElementById('periodYear').value, 10);
+  const month = parseInt(document.getElementById('periodMonth').value, 10);
+  const label = periodLabel(year, month);
+
+  const header = ['Date','Day','Status','Daily Plan','First Arrival Time','Last Departure Time','Paid Time (hrs)','Remarks'];
+  const lines = [];
+  if(companyName) lines.push(['Company Name', csvField(companyName)].join(','));
+  lines.push(['Employee Name', csvField(empName)].join(','));
+  lines.push(['Period', csvField(label)].join(','));
+  lines.push('');
+  lines.push(header.join(','));
+  rows.forEach(r=>{
+    lines.push([r.date||'', dayName(r.date), r.status||'', csvField(r.plan), r.arrival||'', r.departure||'', r.paid||'', csvField(r.remarks)].join(','));
+  });
+  return {csv: lines.join('\n'), label};
+}
+
+function exportCSV(){
+  const {csv, label} = csvText();
+  const uri = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+  const a = document.createElement('a');
+  a.href = uri; a.download = `time_sheet_${label.replace(' ','_')}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+async function buildXLSX(){
+  const empName = document.getElementById('empName').value || '';
+  const companyName = document.getElementById('companyName').value.trim();
+  const year = parseInt(document.getElementById('periodYear').value, 10);
+  const month = parseInt(document.getElementById('periodMonth').value, 10);
+  const label = periodLabel(year, month);
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Time Sheet');
+
+  if(companyName){
+    const companyRow = ws.addRow(['Company Name', companyName]);
+    companyRow.font = {bold:true};
+  }
+  ws.addRow(['Employee Name', empName]);
+  ws.addRow(['Period', label]);
+  ws.addRow([]);
+  const headerRow = ws.addRow(['Date','Day','Status','Daily Plan','First Arrival Time','Last Departure Time','Paid Time (hrs)','Remarks']);
+  headerRow.font = {bold:true};
+
+  const YELLOW = {type:'pattern', pattern:'solid', fgColor:{argb:'FFFDE68A'}};
+  const BLUE = {type:'pattern', pattern:'solid', fgColor:{argb:'FFBFDBFE'}};
+  const RED_FONT = {color:{argb:'FFDC2626'}, bold:true};
+  const THIN_RED = {style:'thin', color:{argb:'FFDC2626'}};
+
+  rows.forEach(r=>{
+    const row = ws.addRow([r.date||'', dayName(r.date), r.status||'', r.plan||'', r.arrival||'', r.departure||'', r.paid?Number(r.paid):'', r.remarks||'']);
+    if(r.status==='Weekend' || r.status==='Holiday'){
+      row.eachCell({includeEmpty:true}, cell=> cell.fill = YELLOW);
+    }
+    if(r.status==='On Leave'){
+      row.eachCell({includeEmpty:true}, cell=> cell.fill = BLUE);
+    }
+    if(isWorkDay(r)){
+      if(!r.plan) row.getCell(4).border = {top:THIN_RED,left:THIN_RED,bottom:THIN_RED,right:THIN_RED};
+      if(!r.arrival) row.getCell(5).border = {top:THIN_RED,left:THIN_RED,bottom:THIN_RED,right:THIN_RED};
+      if(!r.departure) row.getCell(6).border = {top:THIN_RED,left:THIN_RED,bottom:THIN_RED,right:THIN_RED};
+    }
+  });
+
+  const totalRow = ws.addRow(['','','','','','Total Hours', rows.reduce((s,r)=>s+(parseFloat(r.paid)||0),0)]);
+  totalRow.font = {bold:true};
+
+  ws.columns = [{width:12},{width:12},{width:9},{width:28},{width:14},{width:14},{width:13},{width:28}];
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  return {blob, filename: `time_sheet_${label.replace(' ','_')}.xlsx`};
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function exportXLSX(){
+  const {blob, filename} = await buildXLSX();
+  downloadBlob(blob, filename);
+}
+
+// ================= Manage drop-down lists (v4) =================
+let mlField = 'plan';
+const ML_TITLE = {plan:'Daily Plan', remarks:'Remarks'};
+
+function allRowSets(){
+  const sets = [];
+  Object.keys(periods).forEach(k=>{ if(k!==currentPeriod) sets.push(periods[k].rows||[]); });
+  sets.push(rows);
+  return sets;
+}
+function usageCount(field, val){
+  let n = 0;
+  allRowSets().forEach(rs => rs.forEach(r=>{ if(r[field]===val) n++; }));
+  return n;
+}
+function entriesWord(n){ return n + (n===1 ? ' entry' : ' entries'); }
+
+function openLists(){
+  fillPrompt = null; addingNew = null;
+  document.getElementById('listsModal').classList.remove('hidden');
+  renderLists();
+}
+function closeLists(){
+  document.getElementById('listsModal').classList.add('hidden');
+  render();
+}
+function setListTab(f){ mlField = f; renderLists(); }
+
+function renderLists(){
+  const f = mlField, arr = lists[f];
+  const tabs = ['plan','remarks'].map(k=>`<button class="ml-tab${k===f?' on':''}" onclick="setListTab('${k}')">${ML_TITLE[k]} (${lists[k].length})</button>`).join(' ');
+  const items = arr.length ? arr.map((v,i)=>`
+    <div class="ml-row">
+      <input type="text" value="${esc(v)}" maxlength="500" aria-label="${ML_TITLE[f]} option ${i+1}" onchange="renameItem(${i},this)" onkeydown="if(event.key==='Enter')this.blur()">
+      <span class="text-xs text-slate-500" style="white-space:nowrap;min-width:52px;text-align:right" title="Number of time sheet entries using this option">${usageCount(f,v)} used</span>
+      <button class="ml-btn" onclick="moveItem(${i},-1)" ${i===0?'disabled':''} aria-label="Move up">↑</button>
+      <button class="ml-btn" onclick="moveItem(${i},1)" ${i===arr.length-1?'disabled':''} aria-label="Move down">↓</button>
+      <button class="ml-btn" style="background:#7f1d1d" onclick="delItem(${i})" aria-label="Delete option">✕</button>
+    </div>`).join('') : `<p class="text-xs text-slate-500 mb-3">No options yet. Add one below, or pick "+ Add new…" in the table.</p>`;
+  document.getElementById('listsBody').innerHTML = `
+    <div class="flex gap-2 mb-3 flex-wrap">${tabs}</div>
+    <p class="text-xs text-slate-400 mb-3">Edit a name to rename it everywhere. Use ↑ ↓ to set the order shown in the drop-down. Deleting only removes it from the drop-down — existing entries keep their text.</p>
+    ${items}
+    <div class="ml-row" style="margin-top:10px">
+      <input type="text" id="newListItem" maxlength="500" placeholder="Add a new ${ML_TITLE[f]} option" onkeydown="if(event.key==='Enter'){event.preventDefault();addListItem();}">
+      <button class="ml-btn" style="background:#065f46;white-space:nowrap" onclick="addListItem()">Add</button>
+    </div>
+    <div class="mt-3"><button class="ml-btn" onclick="sortList()" ${arr.length<2?'disabled':''}>Sort A–Z</button></div>`;
+}
+
+function listChanged(){ fillPrompt = null; render(); renderLists(); }
+
+function addListItem(){
+  const el = document.getElementById('newListItem');
+  const v = el.value.trim();
+  if(!v) return;
+  if(lists[mlField].includes(v)){ alert(`"${v}" is already in the list.`); el.select(); return; }
+  lists[mlField].push(v);
+  listChanged();
+  const n = document.getElementById('newListItem'); if(n) n.focus();
+}
+
+function renameItem(i, el){
+  const f = mlField, old = lists[f][i], nv = el.value.trim();
+  if(!nv || nv === old){ renderLists(); return; }
+  if(lists[f].includes(nv)){ alert(`"${nv}" is already in the list.`); renderLists(); return; }
+  const n = usageCount(f, old);
+  if(n > 0 && !confirm(`Rename "${old}" to "${nv}"?\n\nIt will be updated in ${entriesWord(n)} across your time sheets.`)){ renderLists(); return; }
+  allRowSets().forEach(rs => rs.forEach(r=>{ if(r[f]===old) r[f] = nv; }));
+  lists[f][i] = nv;
+  listChanged();
+}
+
+function moveItem(i, d){
+  const arr = lists[mlField], j = i + d;
+  if(j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  listChanged();
+}
+
+function delItem(i){
+  const f = mlField, v = lists[f][i], n = usageCount(f, v);
+  const msg = n > 0
+    ? `Delete "${v}" from the ${ML_TITLE[f]} drop-down?\n\nIt is used in ${entriesWord(n)}. Those entries will keep their text; it just won't be offered in the drop-down any more.`
+    : `Delete "${v}" from the ${ML_TITLE[f]} drop-down?`;
+  if(!confirm(msg)) return;
+  lists[f].splice(i, 1);
+  listChanged();
+}
+
+function sortList(){
+  lists[mlField].sort((a,b)=>a.localeCompare(b));
+  listChanged();
+}
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape' && !document.getElementById('listsModal').classList.contains('hidden')) closeLists();
+});
+
+// ================= Backup & restore (v4) =================
+function setBackupStatus(msg, kind){
+  const el = document.getElementById('backupStatus');
+  el.textContent = msg;
+  el.className = 'text-xs mt-1 ' + (kind==='ok' ? 'msg-ok' : kind==='err' ? 'msg-err' : 'msg-info');
+}
+function updateBackupInfo(){
+  const el = document.getElementById('backupInfo');
+  if(!el) return;
+  const d = lastBackup ? new Date(lastBackup) : null;
+  el.textContent = d && !isNaN(d) ? `Last backup downloaded: ${d.toLocaleString()}` : 'No backup downloaded yet from this device.';
+}
+
+const STATUS_LIST = ['Present','Weekend','Holiday','On Leave'];
+function sanitizeImport(raw){
+  if(!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('this is not a Time Sheet backup file');
+  const d = (raw.data && typeof raw.data === 'object') ? raw.data : raw;
+  if(!d.periods || typeof d.periods !== 'object' || Array.isArray(d.periods)) throw new Error('no time sheet data found in this file');
+  const str = v => typeof v === 'string' ? v : (v == null ? '' : String(v));
+  const timeOk = v => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : '';
+  const legacyStatus = r => {
+    if(r.dayType !== undefined) return r.dayType === '' ? 'Present' : (r.dayType === 'Yes' ? 'Holiday' : r.dayType);
+    if(r.holiday !== undefined) return r.holiday ? 'Holiday' : 'Present';
+    return 'Present';
+  };
+  let nid = 0, months = 0, entries = 0;
+  const periods2 = {};
+  Object.keys(d.periods).forEach(k=>{
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(k)) return;
+    const src = d.periods[k];
+    if(!src || !Array.isArray(src.rows)) return;
+    const rs = src.rows.filter(r => r && typeof r === 'object').slice(0,400).map(r=>{
+      const row = {
+        id: nid++,
+        date: typeof r.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : '',
+        status: STATUS_LIST.includes(r.status) ? r.status : (r.status === undefined ? legacyStatus(r) : 'Present'),
+        plan: str(r.plan).slice(0,500),
+        arrival: timeOk(r.arrival),
+        departure: timeOk(r.departure),
+        paid: '',
+        remarks: str(r.remarks).slice(0,500)
+      };
+      if(!STATUS_LIST.includes(row.status)) row.status = 'Present';
+      row.paid = calcPaidHours(row);
+      return row;
+    });
+    if(!rs.length) return;
+    periods2[k] = {rows: rs};
+    months++; entries += rs.length;
+  });
+  if(!months) throw new Error('no time sheet months found in this file');
+  const out = {
+    empName: str(d.empName).slice(0,200),
+    companyName: str(d.companyName).slice(0,200),
+    currentPeriod: (typeof d.currentPeriod === 'string' && periods2[d.currentPeriod]) ? d.currentPeriod : Object.keys(periods2).sort().pop(),
+    periods: periods2,
+    weekendDays: Array.isArray(d.weekendDays) ? d.weekendDays.filter(n => Number.isInteger(n) && n>=0 && n<=6) : [0,6],
+    email: {to: str(d.email && d.email.to).slice(0,254), format: d.email && d.email.format === 'csv' ? 'csv' : 'xlsx'},
+    lastBackup: lastBackup
+  };
+  if(d.lists && Array.isArray(d.lists.plan) && Array.isArray(d.lists.remarks)){
+    out.lists = {plan: cleanList(d.lists.plan), remarks: cleanList(d.lists.remarks)};
+  }
+  out._months = months; out._entries = entries;
+  out._exportedAt = typeof raw.exportedAt === 'string' ? raw.exportedAt : '';
+  return out;
+}
+
+// ================= Send to manager (v4) =================
+function setSendStatus(msg, kind){
+  const el = document.getElementById('sendStatus');
+  el.textContent = msg;
+  el.className = 'text-xs mt-2 ' + (kind==='ok' ? 'msg-ok' : kind==='err' ? 'msg-err' : 'msg-info');
+}
+function isMobileShare(){
+  const ua = navigator.userAgent || '';
+  const touch = (navigator.maxTouchPoints || 0) > 1;
+  return /Android|iPhone|iPad|iPod/i.test(ua) || (touch && /Macintosh/i.test(ua));
+}
+function openMailto(url){ window.location.href = url; }
+
+async function sendToManager(){
+  const to = document.getElementById('mgrEmail').value.trim();
+  const fmt = document.getElementById('mgrFormat').value;
+  const empName = document.getElementById('empName').value.trim();
+  const companyName = document.getElementById('companyName').value.trim();
+  if(!empName){ setSendStatus('Please enter the employee Name at the top first.', 'err'); document.getElementById('empName').focus(); return; }
+  if(to && !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(to)){ setSendStatus('That manager email address does not look valid.', 'err'); document.getElementById('mgrEmail').focus(); return; }
+  const missing = rows.filter(r=> isWorkDay(r) && (!r.plan || !r.arrival || !r.departure)).length;
+  if(missing > 0 && !confirm(`${missing} working day(s) are still missing Daily Plan, First Arrival, or Last Departure.\n\nSend the time sheet anyway?`)) { setSendStatus('Not sent — finish the highlighted days first.', 'info'); return; }
+
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+  try{
+    setSendStatus('Preparing file…', 'info');
+    let blob, filename, mime;
+    if(fmt === 'csv'){
+      const {csv, label} = csvText();
+      blob = new Blob(['\uFEFF' + csv], {type:'text/csv'});
+      filename = `time_sheet_${label.replace(' ','_')}.csv`; mime = 'text/csv';
+    } else {
+      try{ ({blob, filename} = await buildXLSX()); }
+      catch(e){ setSendStatus('Could not create the Excel file (the Excel library may not have loaded — check your internet connection) — try "CSV" instead.', 'err'); return; }
+      mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+    const year = parseInt(document.getElementById('periodYear').value, 10);
+    const month = parseInt(document.getElementById('periodMonth').value, 10);
+    const label = periodLabel(year, month);
+    const total = rows.reduce((sum,r)=> sum + (parseFloat(r.paid)||0), 0).toFixed(2);
+    const presentDays = rows.filter(r=>r.status==='Present' && r.date).length;
+    const subject = `Time Sheet - ${label} - ${empName}`;
+    const body = `Hi,\n\nPlease find attached my time sheet for ${label}.\n\n` +
+      (companyName ? `Company: ${companyName}\n` : '') +
+      `Employee: ${empName}\nPeriod: ${label}\nWorking days: ${presentDays}\nTotal paid hours: ${total}\n\nRegards,\n${empName}`;
+
+    if(isMobileShare() && navigator.canShare && typeof File === 'function'){
+      const file = new File([blob], filename, {type: mime});
+      if(navigator.canShare({files:[file]})){
+        try{
+          await navigator.share({files:[file], title:subject, text:body});
+          setSendStatus(to ? `Shared ✓ — address your email to ${to}.` : 'Shared ✓', 'ok');
+          return;
+        }catch(e){
+          if(e && e.name === 'AbortError'){ setSendStatus('Sharing cancelled.', 'info'); return; }
+          // any other failure: fall through to download + mailto
+        }
+      }
+    }
+    downloadBlob(blob, filename);
+    const url = 'mailto:' + encodeURIComponent(to).replace(/%40/g,'@') + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body).replace(/%0A/g,'%0D%0A');
+    setTimeout(()=>openMailto(url), 300);
+    setSendStatus(`${filename} downloaded — attach it to the email that just opened${to ? '' : ' and add the recipient'}.`, 'ok');
+  } finally { btn.disabled = false; }
+}
+
+
+// ================= Security (v5) =================
+const SECURITY_KEY = 'ts_security_v1';
+const PBKDF2_ITERATIONS = 310000;
+let security = {
+  appLockEnabled:false,
+  pinSalt:'',
+  pinVerifier:'',
+  encryptBackups:false,
+  biometricEnabled:false,
+  webauthnCredentialId:'',
+  failedUnlocks:0
+};
+let appLocked = false;
+
+function bytesToB64(bytes){
+  let bin=''; const a=new Uint8Array(bytes);
+  for(let i=0;i<a.length;i+=0x8000) bin += String.fromCharCode(...a.subarray(i,i+0x8000));
+  return btoa(bin);
+}
+function b64ToBytes(str){
+  const bin=atob(str); const a=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i);
+  return a;
+}
+function randomB64(n=16){ return bytesToB64(crypto.getRandomValues(new Uint8Array(n))); }
+
+async function deriveKey(password, saltB64, usages=['encrypt','decrypt']){
+  const material=await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2',salt:b64ToBytes(saltB64),iterations:PBKDF2_ITERATIONS,hash:'SHA-256'},
+    material,{name:'AES-GCM',length:256},false,usages
+  );
+}
+async function pinDigest(pin, saltB64){
+  const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64ToBytes(saltB64),iterations:PBKDF2_ITERATIONS,hash:'SHA-256'},material,256);
+  return bytesToB64(bits);
+}
+function saveSecuritySettings(){
+  try{
+    localStorage.setItem(SECURITY_KEY,JSON.stringify(security));
+    updateSecurityUI();
+  }catch(e){ setSecurityStatus('Could not save security settings.', 'err'); }
+}
+function loadSecuritySettings(){
+  try{
+    const d=JSON.parse(localStorage.getItem(SECURITY_KEY)||'null');
+    if(d && typeof d==='object') security=Object.assign(security,d);
+  }catch(e){}
+  updateSecurityUI();
+}
+function setSecurityStatus(msg,kind='info'){
+  const el=document.getElementById('securityStatus'); if(!el)return;
+  el.textContent=msg; el.className='text-xs ' + (kind==='ok'?'msg-ok':kind==='err'?'msg-err':'msg-info');
+}
+function updateSecurityUI(){
+  const a=document.getElementById('appLockEnabled'), o=document.getElementById('lockOptions'),
+        e=document.getElementById('encryptBackups'), b=document.getElementById('biometricEnabled');
+  if(a) a.checked=!!security.appLockEnabled;
+  if(o) o.classList.toggle('hidden',!security.appLockEnabled);
+  if(e) e.checked=!!security.encryptBackups;
+  if(b) b.checked=!!security.biometricEnabled;
+  updateBiometricUI();
+}
+function toggleAppLock(enabled){
+  if(enabled){
+    if(!security.pinVerifier){
+      setSecurityStatus('Set a PIN first. App Lock has not been enabled.', 'err');
+      updateSecurityUI(); setOrChangePin(true); return;
+    }
+    security.appLockEnabled=true; saveSecuritySettings();
+    setSecurityStatus('App Lock enabled.', 'ok');
+  }else{
+    if(!confirm('Disable App Lock on this device?')){ updateSecurityUI(); return; }
+    security.appLockEnabled=false; security.biometricEnabled=false; security.webauthnCredentialId='';
+    saveSecuritySettings(); setSecurityStatus('App Lock disabled.', 'info');
+  }
+}
+async function setOrChangePin(enabling=false){
+  const first=prompt('Enter a new PIN (at least 4 characters):');
+  if(first===null)return;
+  if(String(first).length<4){ setSecurityStatus('PIN must contain at least 4 characters.', 'err'); updateSecurityUI(); return; }
+  const second=prompt('Re-enter the new PIN:');
+  if(second!==first){ setSecurityStatus('PINs did not match. Nothing changed.', 'err'); updateSecurityUI(); return; }
+  try{
+    const salt=randomB64(16), verifier=await pinDigest(first,salt);
+    security.pinSalt=salt; security.pinVerifier=verifier; security.appLockEnabled=true;
+    security.failedUnlocks=0; saveSecuritySettings();
+    setSecurityStatus('PIN set successfully. App Lock is enabled.', 'ok');
+    if(enabling) lockApp();
+  }catch(e){ setSecurityStatus('Could not set the PIN in this browser.', 'err'); updateSecurityUI(); }
+}
+function lockApp(){
+  if(!security.appLockEnabled || !security.pinVerifier)return;
+  appLocked=true;
+  const box=document.getElementById('lockScreen'); box.classList.remove('hidden');
+  const pin=document.getElementById('unlockPin'); pin.value=''; pin.focus();
+  document.getElementById('unlockStatus').textContent='';
+  updateBiometricUI();
+}
+async function unlockApp(){
+  if(!security.pinVerifier){ setUnlockStatus('No PIN is configured.'); return; }
+  const pin=document.getElementById('unlockPin').value;
+  if(!pin){ setUnlockStatus('Enter your PIN.'); return; }
+  try{
+    const digest=await pinDigest(pin,security.pinSalt);
+    if(digest===security.pinVerifier){
+      security.failedUnlocks=0; saveSecuritySettings();
+      appLocked=false; document.getElementById('lockScreen').classList.add('hidden');
+      document.getElementById('unlockPin').value='';
+      return;
+    }
+    security.failedUnlocks=(security.failedUnlocks||0)+1; saveSecuritySettings();
+    document.getElementById('unlockPin').value='';
+    setUnlockStatus('Incorrect PIN.');
+  }catch(e){ setUnlockStatus('Could not verify the PIN.'); }
+}
+function setUnlockStatus(msg){ document.getElementById('unlockStatus').textContent=msg; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter' && appLocked) unlockApp();
+});
+
+async function webauthnSupportStatus(){
+  const status={secure:!!window.isSecureContext, api:!!(window.PublicKeyCredential && navigator.credentials), platform:false};
+  if(status.secure && status.api && typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable==='function'){
+    try{ status.platform=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }catch(e){ status.platform=false; }
+  }
+  return status;
+}
+async function webauthnSupported(){
+  const s=await webauthnSupportStatus();
+  return s.secure && s.api;
+}
+async function updateBiometricUI(){
+  const btn=document.getElementById('unlockBiometricBtn'), info=document.getElementById('biometricInfo'), checkbox=document.getElementById('biometricEnabled');
+  if(!btn||!info)return;
+  const s=await webauthnSupportStatus();
+  const enrolled=!!(security.biometricEnabled && security.webauthnCredentialId);
+  btn.classList.toggle('hidden',!(s.secure && s.api && enrolled));
+  if(checkbox){
+    checkbox.disabled=!(s.secure && s.api);
+    checkbox.title=checkbox.disabled?'Open this app from HTTPS to enable device biometric.':'';
+  }
+  if(!s.secure){
+    info.textContent='Device biometric is unavailable because this app is opened as a local file. Open it from an HTTPS address to enable fingerprint, Face ID, or Windows Hello. PIN App Lock still works here.';
+  }else if(!s.api){
+    info.textContent='This browser does not provide WebAuthn. PIN App Lock remains available.';
+  }else if(!s.platform){
+    info.textContent='WebAuthn is available, but this browser/device did not report a built-in biometric authenticator. A compatible security key may still be available.';
+  }else if(enrolled){
+    info.textContent='Device biometric is enrolled. Fingerprint, Face ID, or the device security prompt will be used when available.';
+  }else{
+    info.textContent='Device biometric is available. Enable this option to enroll it for app unlocking.';
+  }
+}
+async function toggleBiometric(enabled){
+  if(!enabled){ security.biometricEnabled=false; security.webauthnCredentialId=''; saveSecuritySettings(); return; }
+  const s=await webauthnSupportStatus();
+  if(!s.secure || !s.api){
+    setSecurityStatus('Device biometric requires an HTTPS page with WebAuthn support. PIN App Lock remains available.', 'err');
+    security.biometricEnabled=false; saveSecuritySettings(); return;
+  }
+  if(!s.platform){
+    setSecurityStatus('No built-in device biometric authenticator was detected. PIN App Lock remains available.', 'err');
+    security.biometricEnabled=false; saveSecuritySettings(); return;
+  }
+  try{
+    const userId=crypto.getRandomValues(new Uint8Array(16));
+    const cred=await navigator.credentials.create({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rp:{name:'Time Sheet'},
+      user:{id:userId,name:'timesheet-user',displayName:'Time Sheet User'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',residentKey:'preferred',userVerification:'required'},
+      timeout:60000,
+      attestation:'none'
+    }});
+    if(!cred)throw new Error('No credential created');
+    security.biometricEnabled=true;
+    security.webauthnCredentialId=bytesToB64(cred.rawId);
+    saveSecuritySettings();
+    setSecurityStatus('Device biometric enrolled successfully on this device.', 'ok');
+  }catch(e){
+    security.biometricEnabled=false; security.webauthnCredentialId=''; saveSecuritySettings();
+    setSecurityStatus('Biometric enrollment was cancelled or unavailable. PIN App Lock is still available.', 'err');
+  }
+}
+async function unlockWithBiometric(){
+  const s=await webauthnSupportStatus();
+  if(!s.secure || !s.api || !security.webauthnCredentialId){ setUnlockStatus('Device biometric is not available in this app mode. Use your PIN.'); return; }
+  try{
+    const cred=await navigator.credentials.get({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials:[{type:'public-key',id:b64ToBytes(security.webauthnCredentialId)}],
+      userVerification:'required',timeout:60000
+    }});
+    if(cred){
+      security.failedUnlocks=0; saveSecuritySettings(); appLocked=false;
+      document.getElementById('lockScreen').classList.add('hidden');
+    }
+  }catch(e){ setUnlockStatus('Biometric verification failed or was cancelled. Use your PIN to unlock.'); }
+}
+
+// ---- Encrypted backups ----
+function backupPayload(){
+  const stamp=new Date().toISOString();
+  return {app:'TimeSheet',appVersion:APP_VERSION,exportedAt:stamp,data:buildState()};
+}
+async function makeEncryptedBackup(password){
+  if(!password || password.length<4) throw new Error('Backup password must contain at least 4 characters.');
+  const salt=randomB64(16), iv=randomB64(12), key=await deriveKey(password,salt,['encrypt']);
+  const plaintext=new TextEncoder().encode(JSON.stringify(backupPayload()));
+  const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv:b64ToBytes(iv),tagLength:128},key,plaintext);
+  return {format:'TimeSheetEncryptedBackup',formatVersion:1,appVersion:APP_VERSION,kdf:'PBKDF2-SHA-256',iterations:PBKDF2_ITERATIONS,cipher:'AES-256-GCM',salt,iv,ciphertext:bytesToB64(cipher)};
+}
+async function readBackupFile(text,password){
+  const raw=JSON.parse(text);
+  if(raw && raw.format==='TimeSheetEncryptedBackup'){
+    if(!password) throw new Error('A backup password is required.');
+    if(raw.formatVersion!==1 || raw.kdf!=='PBKDF2-SHA-256' || raw.cipher!=='AES-256-GCM') throw new Error('unsupported encrypted backup format');
+    const key=await deriveKey(password,raw.salt,['decrypt']);
+    let plain;
+    try{ plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64ToBytes(raw.iv),tagLength:128},key,b64ToBytes(raw.ciphertext)); }
+    catch(e){ throw new Error('wrong backup password or corrupted backup'); }
+    return JSON.parse(new TextDecoder().decode(plain));
+  }
+  return raw; // v4/plain JSON compatibility
+}
+async function downloadBackup(){
+  try{
+    let encrypted=!!security.encryptBackups, payload, filename;
+    if(encrypted){
+      const p1=prompt('Create a password for this encrypted backup (at least 4 characters):');
+      if(p1===null)return;
+      const p2=prompt('Re-enter the backup password:');
+      if(p2!==p1){ setBackupStatus('Passwords did not match. No backup was downloaded.', 'err'); return; }
+      payload=await makeEncryptedBackup(p1);
+      filename=`time_sheet_backup_${new Date().toISOString().slice(0,10)}.tsb`;
+    }else{
+      payload=backupPayload();
+      filename=`time_sheet_backup_${payload.exportedAt.slice(0,10)}.json`;
+    }
+    lastBackup=payload.exportedAt || new Date().toISOString();
+    const blob=new Blob([JSON.stringify(payload,null,1)],{type:'application/json'});
+    downloadBlob(blob,filename); saveState(); updateBackupInfo();
+    setBackupStatus(`${encrypted?'Encrypted backup':'Backup'} downloaded (${filename}). Keep it somewhere safe.`, 'ok');
+  }catch(e){ setBackupStatus('Backup failed: '+(e.message||'unknown error'), 'err'); }
+}
+function onRestoreFile(inp){
+  const f=inp.files&&inp.files[0]; if(!f)return;
+  if(f.size>20*1024*1024){ setBackupStatus('That file is too large to be a Time Sheet backup. Nothing was changed.','err'); inp.value=''; return; }
+  const rd=new FileReader();
+  rd.onerror=()=>{setBackupStatus('Could not read that file. Nothing was changed.','err');inp.value='';};
+  rd.onload=async()=>{
+    try{
+      const text=rd.result;
+      let raw;
+      try{ raw=JSON.parse(text); }catch(e){ throw new Error('this is not a valid Time Sheet backup file'); }
+      let password=null;
+      if(raw && raw.format==='TimeSheetEncryptedBackup'){
+        password=prompt('Enter the password for this encrypted backup:');
+        if(password===null){setBackupStatus('Restore cancelled — nothing was changed.','info');return;}
+      }
+      const decrypted=await readBackupFile(text,password);
+      const clean=sanitizeImport(decrypted);
+      const when=clean._exportedAt&&!isNaN(new Date(clean._exportedAt))?` saved on ${new Date(clean._exportedAt).toLocaleString()}`:'';
+      const who=clean.empName?` for "${clean.empName}"`:'';
+      if(!confirm(`Restore this backup${who}${when}?\n\nIt contains ${clean._months} month${clean._months>1?'s':''} of data (${clean._entries} rows).\n\nThis REPLACES all data currently on this device.`)){
+        setBackupStatus('Restore cancelled — nothing was changed.','info');return;
+      }
+      delete clean._months;delete clean._entries;delete clean._exportedAt;
+      applyData(clean);renderWeekendPicker();fillPrompt=null;addingNew=null;
+      document.getElementById('demoBanner').classList.add('hidden');render();
+      setBackupStatus('Backup restored successfully ✓','ok');
+    }catch(e){ setBackupStatus('Could not restore: '+(e&&e.message?e.message:'unreadable file')+'. Nothing was changed.','err'); }
+    finally{inp.value='';}
+  };
+  rd.readAsText(f);
+}
+
+// Prevent accidental interaction behind the lock and hide the app until security settings load.
+loadSecuritySettings();
+if(security.appLockEnabled && security.pinVerifier) setTimeout(lockApp,0);
+
+// ---- Init ----
+if(loadState()){
+  renderWeekendPicker();
+  render();
+} else {
+  const now = new Date();
+  document.getElementById('periodMonth').value = now.getMonth()+1;
+  document.getElementById('periodYear').value = now.getFullYear();
+  renderWeekendPicker();
+  onPeriodChange();
+  updateBackupInfo();
+}
+</script>
+
+
+<div id="lockScreen" class="security-back hidden" role="dialog" aria-modal="true" aria-label="App locked">
+  <div class="security-box card">
+    <div class="text-center">
+      <div class="text-3xl mb-2">🔒</div>
+      <h2 class="text-lg font-bold text-white">Time Sheet Locked</h2>
+      <p class="security-note mt-1">Enter your PIN to continue.</p>
+    </div>
+    <div class="mt-4 space-y-2">
+      <input id="unlockPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="128" placeholder="PIN">
+      <button onclick="unlockApp()" class="w-full text-sm bg-[var(--accent)] text-black font-semibold px-4 py-2 rounded-lg">Unlock</button>
+      <button id="unlockBiometricBtn" onclick="unlockWithBiometric()" class="hidden w-full text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-lg">Use device biometric</button>
+      <p id="unlockStatus" class="text-xs text-center msg-err"></p>
+    </div>
+  </div>
+</div>
+</body>
+</html>
